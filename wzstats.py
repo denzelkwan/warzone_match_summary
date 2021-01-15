@@ -1,26 +1,58 @@
 import asyncio
 import json
 import callofduty
+import csv
+import re
+import config
 
 from callofduty import Mode, Platform, Title
 
 async def main():
-    client = await callofduty.Login("eye-cream@hotmail.com", "KxwWthqr3LxG2fD")
+
+    ## credentials for https://my.callofduty.com/login
+    email = config.email
+    password = config.password
+
+    client = await callofduty.Login(email, password)
 
     myTeamSummary = []
 
-    # playerName = "Kobe Bryant"
-    # playerId = "3528767"
+    while True:
+        playerName = input("Enter your activision name (case sensitive): ")
+        playerId = input ("Enter your activision id (press enter if none): ")
+        username = playerName
 
-    playerName = input("Enter your in-game name (case sensitive): ")
-    playerId = input("Enter your unique playerID beside your in-game name: ")
-    username = playerName + "#" + playerId
+        if len(playerId):
+            username = playerName + "#" + playerId
 
-    player = await client.GetPlayer(Platform.Activision, username)
+        player = await client.GetPlayer(Platform.Activision, username)
+
+        ## repeats user input prompt if user not found
+        try:
+            await (player.profile(Title.ModernWarfare, Mode.Warzone))
+        except Exception:
+            print("User not found. Please try again")
+            continue
+        else:
+            break
+    
+    print ("fetching warzone team summary...")
 
     ## getting most recent WZ match
-    match = (await player.matches(Title.ModernWarfare, Mode.Warzone, limit = 1))[0]
-    match = await client.GetFullMatch(Platform.Activision, Title.ModernWarfare, Mode.Warzone, match.id)
+    recentGameIndex = 0
+    isBattleRoyale = False
+
+    ## only want Battle Royale matches
+    ## breaks if not duos/trios/quads, hence this mode check
+    while (not(isBattleRoyale)):
+        match = (await player.matches(Title.ModernWarfare, Mode.Warzone, limit = 100))[recentGameIndex] ## limit set to 100 in case the player went on a non-BR binge
+        match = await client.GetFullMatch(Platform.Activision, Title.ModernWarfare, Mode.Warzone, match.id)
+        
+        gameMode = match["allPlayers"][0]["mode"]
+        if (re.search("^br_br.*", gameMode)):
+            break
+        else:
+            recentGameIndex += 1
 
     ## fetching the team placement of the desired player
     ## tedious workaround because the teams() method doesn't work for wz
@@ -39,13 +71,20 @@ async def main():
                 "damage": int(player["playerStats"]["damageDone"])
             }
             myTeamSummary.append(member)
+
+    with open('warzonesummary.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+        writer.writerow(['Team', 'Kills', 'Damage'])
+
+        for member in myTeamSummary:
+            player = member["player"]
+            kills = member["kills"]
+            damage = member["damage"]
+
+            writer.writerow([player, kills, damage])
+        
+        writer.writerow(['Placement', teamPlacement])
     
-    ## this extra print statement just for better visibility in the terminal
-    print ()
-    print ('Placement:', int(teamPlacement), '\n')
-    for member in myTeamSummary:
-        print ('Player:', member["player"])
-        print ('Kills:', member["kills"], 'Damage:', member["damage"], '\n')
+    print ("Done! Please check the warzonesummary.csv file")
 
 asyncio.get_event_loop().run_until_complete(main())
-
