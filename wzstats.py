@@ -16,16 +16,29 @@ async def main():
     client = await callofduty.Login(email, password)
 
     myTeamSummary = []
+    platforms = {
+        '1': Platform.Activision,
+        '2': Platform.BattleNet,
+        '3': Platform.PlayStation,
+        '4': Platform.Xbox
+    }
 
     while True:
-        playerName = input("Enter your activision name (case sensitive): ")
-        playerId = input ("Enter your activision id (press enter if none): ")
+        print ("Enter the platform # you wish to search for.")
+        platform = input("'1' for Activision. '2' for Battlenet. '3' for Playstation. '4' for Xbox: ")
+        playerName = input("Enter your username (case sensitive): ")
+        
+        if (platform == '1' or platform == '2'):
+            playerId = input ("Enter your id (press enter if none): ")
+        
         username = playerName
-
         if len(playerId):
             username = playerName + "#" + playerId
 
-        player = await client.GetPlayer(Platform.Activision, username)
+        if (platform != '1'):
+            playerName = input("Enter your activision name (case sensitive): ")
+
+        player = await client.GetPlayer(platforms[platform], username)
 
         ## repeats user input prompt if user not found
         try:
@@ -35,7 +48,7 @@ async def main():
             continue
         else:
             break
-    
+
     print ("fetching warzone team summary...")
 
     ## getting most recent WZ match
@@ -71,7 +84,7 @@ async def main():
                 "damage": int(player["playerStats"]["damageDone"])
             }
             myTeamSummary.append(member)
-
+    
     with open('warzonesummary.csv', 'w', newline='') as csvfile:
         writer = csv.writer(csvfile, delimiter=',', quotechar='|', quoting=csv.QUOTE_MINIMAL)
         writer.writerow(['Team', 'Kills', 'Damage'])
